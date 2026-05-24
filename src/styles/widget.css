@@ -15,7 +15,11 @@
   --divider: rgba(36, 48, 20, 0.1);
   --text-primary: #243014;
   --text-muted: #5a6644;
-  --accent-today: var(--palette-rose);
+  --widget-width: 540px;
+  --widget-height: 760px;
+  --span-row-height: clamp(11px, 3.2cqi, 14px);
+  --span-lane-gap: 4px;
+  --span-band-top: clamp(28px, 8cqi, 38px);
   --pill-text: #ffffff;
   font-family:
     "Segoe UI Variable Text",
@@ -69,8 +73,8 @@ body::-webkit-scrollbar,
 
 .app-root {
   width: 100%;
-  max-width: 100%;
   height: 100%;
+  max-width: 100%;
   max-height: 100%;
   min-height: 0;
   padding: 0;
@@ -213,26 +217,24 @@ body::-webkit-scrollbar,
 .month-grid-head-cell {
   padding: 0 clamp(1px, 0.4cqi, 3px);
   text-align: center;
-  min-height: 2.4em;
+  min-height: 1.3em;
   display: flex;
   align-items: flex-end;
   justify-content: center;
 }
 
 .month-grid-head-dow {
-  font-size: clamp(0.58rem, 3.1cqi, 0.78rem);
+  font-size: clamp(0.58rem, 2.8cqi, 0.74rem);
   font-weight: 700;
-  letter-spacing: 0.01em;
+  letter-spacing: 0;
   text-transform: capitalize;
   color: var(--text-muted);
-  line-height: 1.15;
+  line-height: 1.2;
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: normal;
-  word-break: break-word;
-  hyphens: auto;
-  max-height: 2.4em;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 .month-grid {
@@ -242,12 +244,9 @@ body::-webkit-scrollbar,
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   background: transparent;
-  overflow-y: auto;
-  overflow-x: hidden;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
+  overflow: hidden;
   padding: 0 2px;
 }
 
@@ -256,30 +255,57 @@ body::-webkit-scrollbar,
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 4px;
   position: relative;
-  flex: 0 0 auto;
+  flex: 1 1 0;
+  min-height: 0;
 }
 
-.week-span-layer {
+.week-span-lane-layer {
   position: absolute;
   left: 0;
   right: 0;
-  top: clamp(28px, 8cqi, 38px);
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  grid-template-rows: repeat(var(--span-lanes, 1), minmax(clamp(11px, 3.2cqi, 14px), auto));
-  gap: 4px;
-  padding: 0 0;
+  gap: var(--span-lane-gap);
   pointer-events: none;
-  z-index: 2;
+  z-index: calc(2 + var(--span-lane, 0));
+  top: calc(
+    var(--span-band-top) + var(--span-lane, 0) * (var(--span-row-height) + var(--span-lane-gap))
+  );
+  isolation: isolate;
+}
+
+.week-today-layer {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.week-today-slot {
+  min-height: 0;
+}
+
+.week-today-highlight {
+  border-radius: 10px;
+  background: rgba(75, 47, 208, 0.14);
+  box-shadow: inset 0 0 0 2px rgba(75, 47, 208, 0.38);
 }
 
 .day-cell-span-slots {
   flex: 0 0 auto;
-  min-height: calc(var(--span-lanes, 1) * clamp(13px, 3.8cqi, 17px));
+  min-height: calc(
+    var(--span-lanes, 1) * var(--span-row-height) + max(0, var(--span-lanes, 1) - 1) * var(--span-lane-gap)
+  );
+  position: relative;
+  z-index: 1;
 }
 
 .day-event-span {
-  min-height: clamp(11px, 3.2cqi, 14px);
+  min-height: var(--span-row-height);
+  position: relative;
   padding: 1px clamp(4px, 1.2cqi, 6px);
   border-radius: 999px;
   color: var(--pill-text);
@@ -308,6 +334,7 @@ body::-webkit-scrollbar,
   background: var(--surface-cell);
   border-radius: 10px;
   min-width: 0;
+  min-height: 0;
   align-self: stretch;
   padding: clamp(3px, 1cqi, 5px);
   color: var(--text-primary);
@@ -318,6 +345,7 @@ body::-webkit-scrollbar,
   cursor: pointer;
   position: relative;
   transition: background 0.12s ease;
+  overflow: hidden;
 }
 
 .day-cell:hover {
@@ -339,6 +367,8 @@ body::-webkit-scrollbar,
 }
 
 .day-cell.today .day-cell-number {
+  position: relative;
+  z-index: 21;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -362,10 +392,23 @@ body::-webkit-scrollbar,
 .day-cell-events {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   margin-top: 2px;
   flex: 1 1 auto;
   justify-content: flex-start;
+  position: relative;
+  z-index: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.day-event-more {
+  flex: 0 0 auto;
+  font-size: clamp(0.4rem, 2cqi, 0.52rem);
+  line-height: 1.1;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 0 2px;
 }
 
 .day-cell--compact-events .day-cell-events {
@@ -374,6 +417,8 @@ body::-webkit-scrollbar,
 
 .day-event-pill {
   flex: 0 0 auto;
+  position: relative;
+  z-index: 1;
   font-size: clamp(0.45rem, 2.4cqi, 0.58rem);
   line-height: 1.2;
   min-height: clamp(13px, 3.8cqi, 17px);
@@ -404,9 +449,10 @@ body::-webkit-scrollbar,
   border-radius: 0;
   border: none;
   border-top: 1px solid var(--divider);
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   min-height: 0;
-  overflow: visible;
+  max-height: 42%;
+  overflow-y: auto;
 }
 
 .event-list-header {

@@ -28,15 +28,31 @@ function addDays(d: Date, days: number): Date {
   return x;
 }
 
+function mondayBeforeOrOn(date: Date): Date {
+  const monday = startOfDay(date);
+  monday.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+  return monday;
+}
+
+/** Days from `date` forward to the Sunday ending its ISO-style (Mon–Sun) week. */
+function daysUntilSunday(date: Date): number {
+  const day = date.getDay();
+  return day === 0 ? 0 : 7 - day;
+}
+
 export function buildMonthGridDays(month: Date): Date[] {
-  const first = new Date(month.getFullYear(), month.getMonth(), 1);
-  const start = new Date(first);
-  const mondayOffset = (first.getDay() + 6) % 7;
-  start.setDate(1 - mondayOffset);
+  const year = month.getFullYear();
+  const monthIndex = month.getMonth();
+  const first = new Date(year, monthIndex, 1);
+  const last = new Date(year, monthIndex + 1, 0);
+
+  const start = mondayBeforeOrOn(first);
+  const end = startOfDay(last);
+  end.setDate(last.getDate() + daysUntilSunday(last));
 
   const days: Date[] = [];
-  for (let i = 0; i < 42; i += 1) {
-    days.push(addDays(start, i));
+  for (let current = startOfDay(start); current.getTime() <= end.getTime(); current = addDays(current, 1)) {
+    days.push(new Date(current));
   }
   return days;
 }
@@ -53,6 +69,32 @@ export function singleDayEventsForDay(day: Date, events: CalendarEvent[]): Calen
   return events
     .filter((event) => eventOccursOnCalendarDay(event, day) && !eventSpansMultipleDays(event))
     .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+}
+
+export type DayEventPlacement = {
+  event: CalendarEvent;
+  row: number;
+};
+
+/** One row per event, sorted by start time — prevents same-time events from overlapping. */
+export function layoutSingleDayEvents(events: CalendarEvent[]): DayEventPlacement[] {
+  return [...events]
+    .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
+    .map((event, row) => ({ event, row }));
+}
+
+function spanSegmentSort(a: WeekSpanSegment, b: WeekSpanSegment): number {
+  if (a.lane !== b.lane) return a.lane - b.lane;
+  if (a.continuesFromPriorWeek !== b.continuesFromPriorWeek) {
+    return a.continuesFromPriorWeek ? -1 : 1;
+  }
+  return a.colStart - b.colStart;
+}
+
+export function spanZIndex(segment: WeekSpanSegment): number {
+  const laneBase = (segment.lane + 1) * 10;
+  const continuedPenalty = segment.continuesFromPriorWeek ? 0 : 5;
+  return laneBase + continuedPenalty;
 }
 
 export function buildWeekSpanSegments(weekDays: Date[], events: CalendarEvent[]): WeekSpanSegment[] {
@@ -103,7 +145,7 @@ export function buildWeekSpanSegments(weekDays: Date[], events: CalendarEvent[])
     });
   }
 
-  return segments;
+  return segments.sort(spanSegmentSort);
 }
 
 export function weekLaneCount(segments: WeekSpanSegment[]): number {

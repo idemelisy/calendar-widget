@@ -28,8 +28,6 @@ export function EventList({ selectedDate, events, canEdit, onAdd, onEdit, onDele
   const matching = events
     .filter((event) => eventOccursOnCalendarDay(event, selectedDate))
     .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
-  const visible = matching.slice(0, 3);
-  const hiddenCount = matching.length - visible.length;
 
   const dateLabel = formatSelectedDate(selectedDate);
 
@@ -47,7 +45,7 @@ export function EventList({ selectedDate, events, canEdit, onAdd, onEdit, onDele
         <p className="event-empty">{ui.noEvents}</p>
       ) : (
         <ul>
-          {visible.map((eventItem) => (
+          {matching.map((eventItem) => (
             <li key={eventItem.id} className="event-list-item">
               <span className="event-color" style={{ backgroundColor: eventFillColor(eventItem.color) }} />
               <div className="event-list-body">
@@ -66,7 +64,6 @@ export function EventList({ selectedDate, events, canEdit, onAdd, onEdit, onDele
               ) : null}
             </li>
           ))}
-          {hiddenCount > 0 ? <li className="event-more-row">{ui.moreEvents(hiddenCount)}</li> : null}
         </ul>
       )}
     </section>

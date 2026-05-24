@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-shell";
 import { invoke } from "@tauri-apps/api/core";
@@ -18,6 +18,7 @@ import type { CalendarEvent, EventDraftInput } from "../types";
 import { useWidgetWindow } from "../hooks/useWidgetWindow";
 import { readAuthSession, saveAuthSession } from "../services/authSession";
 import { formatMonthYear, ui } from "../locale/tr";
+import { calendarEventsEqual } from "../utils/calendarEventsFingerprint";
 
 /** Fixed loopback port so "Web application" OAuth clients can register an exact redirect URI in Google Cloud. */
 const OAUTH_LOOPBACK_PORT = 43123;
@@ -50,7 +51,8 @@ export function CalendarWidget() {
   const [displayedMonth, setDisplayedMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState(today);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const eventsRef = useRef<CalendarEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(() => Boolean(readAuthSession()));
   const [isAuthorizing, setIsAuthorizing] = useState(false);
@@ -58,7 +60,7 @@ export function CalendarWidget() {
   const [editorMode, setEditorMode] = useState<"create" | "edit">("create");
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [editorBusy, setEditorBusy] = useState(false);
-  const { resizeStyle } = useWidgetWindow();
+  const { windowStyle } = useWidgetWindow();
 
   const hasGoogleClient = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID);
   const canEditEvents = isConnected && hasGoogleClient;
@@ -73,17 +75,27 @@ export function CalendarWidget() {
     }
   };
 
-  const refreshEvents = async () => {
-    setLoading(true);
-    setError(null);
+  const refreshEvents = async (options?: { showLoading?: boolean }) => {
+    const showLoading = options?.showLoading ?? false;
+    if (showLoading) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const result = await loadCalendarEvents();
-      setEvents(result);
+      if (!calendarEventsEqual(result, eventsRef.current)) {
+        eventsRef.current = result;
+        setEvents(result);
+      }
     } catch (loadError) {
       const message = loadError instanceof Error ? loadError.message : "Unable to load events.";
-      setError(message);
+      if (showLoading || eventsRef.current.length === 0) {
+        setError(message);
+      }
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
       setIsConnected(Boolean(readAuthSession()));
     }
   };
@@ -127,7 +139,7 @@ export function CalendarWidget() {
       setIsConnected(true);
       setIsAuthorizing(false);
       setError(null);
-      await refreshEvents();
+      await refreshEvents({ showLoading: true });
     } catch (error) {
       localStorage.removeItem("calendar.widget.pkce.verifier");
       throw new Error(`OAuth finalize failed: ${toErrorMessage(error)}`);
@@ -135,9 +147,9 @@ export function CalendarWidget() {
   };
 
   useEffect(() => {
-    void refreshEvents();
+    void refreshEvents({ showLoading: true });
     const interval = window.setInterval(() => {
-      void refreshEvents();
+      void refreshEvents({ showLoading: false });
     }, 5 * 60 * 1000);
     return () => window.clearInterval(interval);
   }, []);
@@ -217,7 +229,7 @@ export function CalendarWidget() {
     setIsAuthorizing(false);
     setEditorOpen(false);
     setEditingEvent(null);
-    await refreshEvents();
+    await refreshEvents({ showLoading: false });
   };
 
   const openCreateEditor = () => {
@@ -251,7 +263,7 @@ export function CalendarWidget() {
       }
       setEditorOpen(false);
       setEditingEvent(null);
-      await refreshEvents();
+      await refreshEvents({ showLoading: false });
     } catch (err) {
       setError(toErrorMessage(err));
     } finally {
@@ -264,7 +276,7 @@ export function CalendarWidget() {
     setError(null);
     try {
       await deleteCalendarEvent(ev.id);
-      await refreshEvents();
+      await refreshEvents({ showLoading: false });
     } catch (err) {
       setError(toErrorMessage(err));
     }
@@ -278,7 +290,7 @@ export function CalendarWidget() {
   };
 
   return (
-    <div className="widget-card" style={resizeStyle} onMouseDown={handleDragStart}>
+    <div className="widget-card" style={windowStyle} onMouseDown={handleDragStart}>
       <div className="drag-handle" data-tauri-drag-region onMouseDown={handleDragStart}>
         <span />
       </div>

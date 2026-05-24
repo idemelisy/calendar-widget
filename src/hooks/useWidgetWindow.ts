@@ -1,9 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
 import { getCurrentWindow, type PhysicalPosition, type PhysicalSize } from "@tauri-apps/api/window";
-import { readWidgetSettings, writeWidgetSettings } from "../services/widgetSettings";
+import {
+  MIN_WIDGET_HEIGHT,
+  MIN_WIDGET_WIDTH,
+  readWidgetSettings,
+  writeWidgetSettings,
+} from "../services/widgetSettings";
 
-const MIN_WIDTH = 300;
-const MIN_HEIGHT = 380;
+export {
+  DEFAULT_WIDGET_HEIGHT,
+  DEFAULT_WIDGET_WIDTH,
+  MIN_WIDGET_HEIGHT,
+  MIN_WIDGET_WIDTH,
+  WIDGET_HEIGHT,
+  WIDGET_MIN_HEIGHT,
+  WIDGET_WIDTH,
+} from "../services/widgetSettings";
+
+function applyWidgetCssVars(width: number, height: number): void {
+  document.documentElement.style.setProperty("--widget-width", `${width}px`);
+  document.documentElement.style.setProperty("--widget-height", `${height}px`);
+}
 
 export function useWidgetWindow() {
   const [size, setSize] = useState(() => {
@@ -14,8 +31,10 @@ export function useWidgetWindow() {
   useEffect(() => {
     const appWindow = getCurrentWindow();
     const settings = readWidgetSettings();
+    applyWidgetCssVars(settings.width, settings.height);
 
     const bootstrap = async () => {
+      await appWindow.setResizable(true);
       await appWindow.setSize({
         type: "Physical",
         width: settings.width,
@@ -30,14 +49,14 @@ export function useWidgetWindow() {
 
     const unlisten = Promise.all([
       appWindow.onMoved(async ({ payload }) => {
-        const current = readWidgetSettings();
-        writeWidgetSettings({ ...current, x: payload.x, y: payload.y });
+        writeWidgetSettings({ ...readWidgetSettings(), x: payload.x, y: payload.y });
       }),
       appWindow.onResized(async ({ payload }) => {
-        const boundedWidth = Math.max(payload.width, MIN_WIDTH);
-        const boundedHeight = Math.max(payload.height, MIN_HEIGHT);
-        setSize({ width: boundedWidth, height: boundedHeight });
-        writeWidgetSettings({ ...readWidgetSettings(), width: boundedWidth, height: boundedHeight });
+        const width = Math.max(payload.width, MIN_WIDGET_WIDTH);
+        const height = Math.max(payload.height, MIN_WIDGET_HEIGHT);
+        setSize({ width, height });
+        applyWidgetCssVars(width, height);
+        writeWidgetSettings({ ...readWidgetSettings(), width, height });
       }),
     ]);
 
@@ -47,17 +66,16 @@ export function useWidgetWindow() {
     };
   }, []);
 
-  const resizeStyle = useMemo(
+  const windowStyle = useMemo(
     () => ({
       width: `${size.width}px`,
       height: `${size.height}px`,
-      minWidth: `${MIN_WIDTH}px`,
-      minHeight: `${MIN_HEIGHT}px`,
-      resize: "both" as const,
+      minWidth: `${MIN_WIDGET_WIDTH}px`,
+      minHeight: `${MIN_WIDGET_HEIGHT}px`,
       overflow: "hidden" as const,
     }),
     [size.height, size.width],
   );
 
-  return { resizeStyle };
+  return { windowStyle };
 }

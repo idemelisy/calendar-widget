@@ -1,11 +1,13 @@
 import type { CalendarEvent } from "../types";
 import { eventFillColor } from "../theme/appPalette";
-import { formatTime, getWeekdayLabels } from "../locale/tr";
+import { formatTime, getWeekdayLabels, ui } from "../locale/tr";
 import { eventOccursOnCalendarDay } from "../utils/eventOnDay";
 import {
   buildMonthGridDays,
   buildWeekSpanSegments,
+  layoutSingleDayEvents,
   singleDayEventsForDay,
+  spanZIndex,
   splitDaysIntoWeeks,
   weekLaneCount,
 } from "../utils/monthGridLayout";
@@ -44,6 +46,8 @@ function labelForEvent(ev: CalendarEvent, compact: boolean): string {
   return truncate(label, compact ? 9 : 14);
 }
 
+const MAX_DAY_PILLS = 3;
+
 export function MonthGrid({ month, selectedDate, events, onSelectDate }: MonthGridProps) {
   const days = buildMonthGridDays(month);
   const weeks = splitDaysIntoWeeks(days);
@@ -74,6 +78,9 @@ export function MonthGrid({ month, selectedDate, events, onSelectDate }: MonthGr
                 const isToday = dayKey === todayKey;
                 const isSelected = dayKey === selectedKey;
                 const dayEvents = singleDayEventsForDay(day, events);
+                const eventPlacements = layoutSingleDayEvents(dayEvents);
+                const visiblePlacements = eventPlacements.slice(0, MAX_DAY_PILLS);
+                const hiddenPillCount = eventPlacements.length - visiblePlacements.length;
                 const compact = dayEvents.length > 2;
                 const summaryTitle = events
                   .filter((event) => eventOccursOnCalendarDay(event, day))
@@ -108,7 +115,7 @@ export function MonthGrid({ month, selectedDate, events, onSelectDate }: MonthGr
                       />
                     ) : null}
                     <div className="day-cell-events">
-                      {dayEvents.map((ev) => {
+                      {visiblePlacements.map(({ event: ev }) => {
                         const full = (() => {
                           const t = formatEventTimeLabel(ev);
                           return t ? `${t} ${ev.title}` : ev.title;
@@ -124,42 +131,64 @@ export function MonthGrid({ month, selectedDate, events, onSelectDate }: MonthGr
                           </div>
                         );
                       })}
+                      {hiddenPillCount > 0 ? (
+                        <span className="day-event-more" title={summaryTitle}>
+                          {ui.moreEvents(hiddenPillCount)}
+                        </span>
+                      ) : null}
                     </div>
                   </button>
                 );
               })}
-              {spanSegments.length > 0 ? (
-                <div
-                  className="week-span-layer"
-                  style={{ ["--span-lanes" as string]: String(laneCount) }}
-                >
-                  {spanSegments.map((segment) => {
-                    const { event, colStart, colSpan, lane, continuesFromPriorWeek, continuesIntoNextWeek } =
-                      segment;
-                    const showTitle = !continuesFromPriorWeek;
-                    return (
-                      <div
-                        key={`${event.id}-${weekIndex}-${lane}`}
-                        className={[
-                          "day-event-span",
-                          continuesFromPriorWeek ? "day-event-span--continued" : "",
-                          continuesIntoNextWeek ? "day-event-span--continues" : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                        style={{
-                          gridColumn: `${colStart} / span ${colSpan}`,
-                          gridRow: lane + 1,
-                          backgroundColor: eventFillColor(event.color),
-                        }}
-                        title={event.title}
-                      >
-                        {showTitle ? truncate(event.title, colSpan > 2 ? 24 : 10) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : null}
+              {laneCount > 0
+                ? Array.from({ length: laneCount }, (_, lane) => (
+                    <div
+                      key={`${weekIndex}-lane-${lane}`}
+                      className="week-span-lane-layer"
+                      style={{ ["--span-lane" as string]: String(lane) }}
+                    >
+                      {spanSegments
+                        .filter((segment) => segment.lane === lane)
+                        .map((segment) => {
+                          const { event, colStart, colSpan, continuesFromPriorWeek, continuesIntoNextWeek } =
+                            segment;
+                          const showTitle = !continuesFromPriorWeek;
+                          return (
+                            <div
+                              key={`${event.id}-${weekIndex}-${colStart}-${lane}`}
+                              className={[
+                                "day-event-span",
+                                continuesFromPriorWeek ? "day-event-span--continued" : "",
+                                continuesIntoNextWeek ? "day-event-span--continues" : "",
+                              ]
+                                .filter(Boolean)
+                                .join(" ")}
+                              style={{
+                                gridColumn: `${colStart} / span ${colSpan}`,
+                                backgroundColor: eventFillColor(event.color),
+                                zIndex: spanZIndex(segment),
+                              }}
+                              title={event.title}
+                            >
+                              {showTitle ? truncate(event.title, colSpan > 2 ? 24 : 10) : null}
+                            </div>
+                          );
+                        })}
+                    </div>
+                  ))
+                : null}
+              <div className="week-today-layer" aria-hidden="true">
+                {weekDays.map((day) => {
+                  const dayKey = toDateKey(day);
+                  const isToday = dayKey === todayKey;
+                  return (
+                    <div
+                      key={`today-${dayKey}`}
+                      className={isToday ? "week-today-highlight" : "week-today-slot"}
+                    />
+                  );
+                })}
+              </div>
             </div>
           );
         })}

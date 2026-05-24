@@ -1,3 +1,15 @@
+export const MIN_WIDGET_WIDTH = 480;
+export const MIN_WIDGET_HEIGHT = 560;
+export const DEFAULT_WIDGET_WIDTH = 540;
+export const DEFAULT_WIDGET_HEIGHT = 760;
+
+/** @deprecated Use DEFAULT_WIDGET_WIDTH */
+export const WIDGET_WIDTH = DEFAULT_WIDGET_WIDTH;
+/** @deprecated Use DEFAULT_WIDGET_HEIGHT */
+export const WIDGET_MIN_HEIGHT = DEFAULT_WIDGET_HEIGHT;
+/** @deprecated Use DEFAULT_WIDGET_HEIGHT */
+export const WIDGET_HEIGHT = DEFAULT_WIDGET_HEIGHT;
+
 export type WidgetSettings = {
   width: number;
   height: number;
@@ -8,26 +20,26 @@ export type WidgetSettings = {
 const SETTINGS_KEY = "calendar.widget.settings.v1";
 
 const defaultSettings: WidgetSettings = {
-  width: 380,
-  height: 520,
+  width: DEFAULT_WIDGET_WIDTH,
+  height: DEFAULT_WIDGET_HEIGHT,
   x: 24,
   y: 24,
 };
 
+function clampDimension(value: number, min: number, max: number, fallback: number): number {
+  const raw = Number.isFinite(value) ? value : fallback;
+  return Math.min(Math.max(min, raw), max);
+}
+
 function sanitizeSettings(settings: Partial<WidgetSettings>): WidgetSettings {
-  // Keep widget bounds compact enough to never "black out" the desktop.
-  const maxWidth = Math.max(300, Math.min(Math.floor(window.screen.availWidth * 0.7), 720));
-  const maxHeight = Math.max(380, Math.min(Math.floor(window.screen.availHeight * 0.8), 900));
-  const rawWidth = Number.isFinite(settings.width) ? (settings.width as number) : defaultSettings.width;
-  const rawHeight = Number.isFinite(settings.height) ? (settings.height as number) : defaultSettings.height;
-  const width = Math.min(Math.max(300, rawWidth), maxWidth);
-  const height = Math.min(Math.max(380, rawHeight), maxHeight);
+  const maxWidth = Math.max(MIN_WIDGET_WIDTH, Math.min(Math.floor(window.screen.availWidth * 0.85), 1200));
+  const maxHeight = Math.max(MIN_WIDGET_HEIGHT, Math.min(Math.floor(window.screen.availHeight * 0.92), 1400));
+  const width = clampDimension(settings.width as number, MIN_WIDGET_WIDTH, maxWidth, defaultSettings.width);
+  const height = clampDimension(settings.height as number, MIN_WIDGET_HEIGHT, maxHeight, defaultSettings.height);
   const maxX = Math.max(0, window.screen.availWidth - width);
   const maxY = Math.max(0, window.screen.availHeight - height);
-  const rawX = Number.isFinite(settings.x) ? (settings.x as number) : defaultSettings.x;
-  const rawY = Number.isFinite(settings.y) ? (settings.y as number) : defaultSettings.y;
-  const x = Math.min(Math.max(0, rawX), maxX);
-  const y = Math.min(Math.max(0, rawY), maxY);
+  const x = clampDimension(settings.x as number, 0, maxX, defaultSettings.x);
+  const y = clampDimension(settings.y as number, 0, maxY, defaultSettings.y);
 
   return { width, height, x, y };
 }
@@ -44,5 +56,5 @@ export function readWidgetSettings(): WidgetSettings {
 }
 
 export function writeWidgetSettings(settings: WidgetSettings): void {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(sanitizeSettings(settings)));
 }
